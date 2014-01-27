@@ -3,7 +3,7 @@ package main
 import (
 	"bufio"
 	"github.com/couchbaselabs/cbsh/api"
-	"github.com/couchbaselabs/liner"
+	"github.com/prataprc/liner"
 	"os"
 )
 
