@@ -1,9 +1,9 @@
 package commands
 
 import (
-    "github.com/prataprc/cbsh/api"
-    "fmt"
-    "strings"
+	"fmt"
+	"github.com/couchbaselabs/cbsh/api"
+	"strings"
 )
 
 var helpDescription = `Detailed help on individual commands`
@@ -18,43 +18,43 @@ with its short description.
 type HelpCommand struct{}
 
 func (cmd *HelpCommand) Name() string {
-    return "help"
+	return "help"
 }
 
 func (cmd *HelpCommand) Description() string {
-    return helpDescription
+	return helpDescription
 }
 
 func (cmd *HelpCommand) Help() string {
-    return helpHelp
+	return helpHelp
 }
 
 func (cmd *HelpCommand) Shells() []string {
-    return []string{api.SHELL_CB, api.SHELL_N1QL, api.SHELL_INDEX}
+	return []string{api.SHELL_CB, api.SHELL_N1QL, api.SHELL_INDEX}
 }
 
 func (cmd *HelpCommand) Complete(c *api.Context, cursor int) []string {
-    return []string{}
+	return []string{}
 }
 
 func (cmd *HelpCommand) Interpret(c *api.Context) (err error) {
-    parts := api.SplitArgs(c.Line, " ")
-    if len(parts) < 2 {
-        for _, cmd := range c.Commands {
-            fmt.Fprintf(c.W, "%-15s %s\n", cmd.Name(), cmd.Description())
-        }
-    } else {
-        cmd := c.Commands[parts[1]]
-        fmt.Fprintln(c.W, api.Yellow(cmd.Description()))
-        help := cmd.Help()
-        if len(strings.Trim(help, " \t\n\r")) > 0 {
-            fmt.Fprintln(c.W, help)
-        }
-        fmt.Fprintf(c.W, "shells: %v\n\n", cmd.Shells())
-    }
-    return
+	parts := api.SplitArgs(c.Line, " ")
+	if len(parts) < 2 {
+		for _, cmd := range c.Commands {
+			fmt.Fprintf(c.W, "%-15s %s\n", cmd.Name(), cmd.Description())
+		}
+	} else {
+		cmd := c.Commands[parts[1]]
+		fmt.Fprintln(c.W, api.Yellow(cmd.Description()))
+		help := cmd.Help()
+		if len(strings.Trim(help, " \t\n\r")) > 0 {
+			fmt.Fprintln(c.W, help)
+		}
+		fmt.Fprintf(c.W, "shells: %v\n\n", cmd.Shells())
+	}
+	return
 }
 
 func init() {
-    knownCommands["help"] = &HelpCommand{}
+	knownCommands["help"] = &HelpCommand{}
 }

@@ -1,8 +1,8 @@
 package commands
 
 import (
-    "github.com/prataprc/cbsh/api"
-    "fmt"
+	"fmt"
+	"github.com/couchbaselabs/cbsh/api"
 )
 
 var commandsDescription = `Short description of all commands for this shell`
@@ -12,33 +12,32 @@ var commandsHelp = `
 type CommandsCommand struct{}
 
 func (cmd *CommandsCommand) Name() string {
-    return "commands"
+	return "commands"
 }
 
 func (cmd *CommandsCommand) Description() string {
-    return commandsDescription
+	return commandsDescription
 }
 
 func (cmd *CommandsCommand) Help() string {
-    return commandsHelp
+	return commandsHelp
 }
 
 func (cmd *CommandsCommand) Shells() []string {
-    return []string{api.SHELL_CB, api.SHELL_INDEX}
+	return []string{api.SHELL_CB, api.SHELL_INDEX}
 }
 
 func (cmd *CommandsCommand) Complete(c *api.Context, cursor int) []string {
-    return []string{}
+	return []string{}
 }
 
 func (cmd *CommandsCommand) Interpret(c *api.Context) (err error) {
-    for name, cmd := range c.ShellCommands(c.Cursh.Name()) {
-        fmt.Fprintf(c.W, "  %-15v %v\n", name, cmd.Description())
-    }
-    return
+	for name, cmd := range c.ShellCommands(c.Cursh.Name()) {
+		fmt.Fprintf(c.W, "  %-15v %v\n", name, cmd.Description())
+	}
+	return
 }
 
 func init() {
-    knownCommands["commands"] = &CommandsCommand{}
+	knownCommands["commands"] = &CommandsCommand{}
 }
-
