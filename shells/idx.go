@@ -33,7 +33,7 @@ func (idx *Indexsh) Init(c *api.Context, commands api.CommandMap) (err error) {
 	idx.Commands = commands
 	idx.printch = make(chan string)
 	idx.quit = make(chan bool)
-	go idx.Print()
+	go idx.Print(c)
 	return
 }
 
@@ -102,7 +102,7 @@ loop:
 	delete(idx.Programs, p.Name)
 }
 
-func (idx *Indexsh) Print() {
+func (idx *Indexsh) Print(c *api.Context) {
 loop:
 	for {
 		select {
