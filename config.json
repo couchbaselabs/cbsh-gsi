@@ -6,7 +6,7 @@
           "local" : [
               ["scp", "-q",
                "/Users/prataprc/devgo/src/github.com/couchbaselabs/tuqtng/tuqtng",
-               "localhost:/Users/prataprc/devindex"
+               "localhost:~/devindex"
               ]
           ],
           "remote" : [
@@ -19,7 +19,7 @@
           "user" : "prataprc",
           "local" : [
               ["scp", "-q",
-               "~/devgo/src/github.com/couchbaselabs/indexing/indexer/indexer",
+               "/Users/prataprc/devgo/src/github.com/couchbaselabs/indexing/indexer/indexer",
                "localhost:~/devindex"
               ]
           ],
@@ -33,7 +33,7 @@
           "user" : "prataprc",
           "local" : [
               ["scp", "-q",
-               "~/devgo/src/github.com/couchbaselabs/indexing/index_manager/index_manager",
+               "/Users/prataprc/devgo/src/github.com/couchbaselabs/indexing/index_manager/index_manager",
                "localhost:~/devindex"
               ]
           ],
@@ -47,12 +47,12 @@
           "user" : "prataprc",
           "local" : [
               ["scp", "-q",
-               "~/devgo/src/github.com/couchbaselabs/indexing/projector/projector",
+               "/Users/prataprc/devgo/src/github.com/couchbaselabs/indexing/projector/projector",
                "localhost:~/devindex"
               ]
           ],
           "remote" : [
-              "cd ~/devindex; ./projector -proto upr -kvhost localhost -imhost localhost -port 9000"
+              "cd ~/devindex; ./projector -kvhost localhost:9000 -imhost localhost:8094 -inhost localhost:8096"
           ],
           "log.color": "magenta"
       }

@@ -18,6 +18,8 @@ type Indexsh struct {
 	CommandList                        // commands loaded for this shell
 	mu          sync.Mutex
 	Programs    map[string]*sshc.Program // List of running programs
+	printch     chan string
+	quit        chan bool
 }
 
 func (idx *Indexsh) Description() string {
@@ -29,6 +31,9 @@ func (idx *Indexsh) Init(c *api.Context, commands api.CommandMap) (err error) {
 	idx.Config = nil
 	idx.Programs = make(map[string]*sshc.Program)
 	idx.Commands = commands
+	idx.printch = make(chan string)
+	idx.quit = make(chan bool)
+	go idx.Print()
 	return
 }
 
@@ -57,6 +62,7 @@ func (idx *Indexsh) Handle(c *api.Context) (err error) {
 
 func (idx *Indexsh) Close(c *api.Context) {
 	idx.Killall(c)
+	close(idx.quit)
 	fmt.Fprintf(c.W, "Exiting shell : %v\n", idx.Name())
 }
 
@@ -81,17 +87,34 @@ loop:
 			if !ok {
 				break loop
 			}
-			fmt.Fprintf(c.W, "%v", s)
+			idx.printch <- s
 		case s, ok := <-p.Errch:
 			if !ok {
 				break loop
 			}
-			fmt.Fprintf(c.W, "%v", s)
+			idx.printch <- s
+		case <-idx.quit:
+			break loop
 		}
 	}
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
 	delete(idx.Programs, p.Name)
+}
+
+func (idx *Indexsh) Print() {
+loop:
+	for {
+		select {
+		case s, ok := <-idx.printch:
+			if !ok {
+				break loop
+			}
+			fmt.Fprintf(c.W, "%v", s)
+		case <-idx.quit:
+			break loop
+		}
+	}
 }
 
 func init() {

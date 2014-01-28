@@ -69,7 +69,7 @@ func RunProgram(name string, conf map[string]interface{}) *Program {
 		errlog: &Log{lines: make([]string, logMaxSize)},
 	}
 
-	// ssh-agen
+	// ssh-agent
 	agent_sock, err := net.Dial("unix", os.Getenv("SSH_AUTH_SOCK"))
 	if err != nil {
 		panic(err)
@@ -119,17 +119,18 @@ func (p *Program) runProgram() {
 	var err error
 	for _, cmd := range p.local {
 		if err = p.runLocalCommand(cmd.name, cmd.args); err != nil {
-			p.Kill()
 			break
 		}
 	}
 	if err == nil {
 		for _, cmd := range p.remote {
 			if err = p.runRemoteCommand(cmd); err != nil {
-				p.Kill()
 				break
 			}
 		}
+	}
+	if err != nil {
+		p.Kill()
 	}
 }
 
@@ -138,7 +139,7 @@ func (p *Program) runLocalCommand(name string, args []string) (err error) {
 	session := exec.Command(name, args...)
 	_, stdout, stderr, errstr := localStandardio(session)
 	if errstr != "" {
-		p.Errch <- p.Sprintf(errstr)
+		p.Errch <- p.Sprintf("%v\n", errstr)
 		p.Kill()
 	}
 
@@ -155,11 +156,11 @@ func (p *Program) runLocalCommand(name string, args []string) (err error) {
 			select {
 			case s, ok = <-chout:
 				if ok {
-					p.Outch <- p.Sprintf("%v", s)
+					p.Outch <- p.Sprintf("%v\n", s)
 				}
 			case s, ok = <-cherr:
 				if ok {
-					p.Errch <- p.Sprintf("%v", s)
+					p.Errch <- p.Sprintf("%v\n", s)
 				}
 			case <-p.quit:
 				ok = false
@@ -170,11 +171,8 @@ func (p *Program) runLocalCommand(name string, args []string) (err error) {
 		}
 	}()
 
-	p.Outch <- p.Sprintf("Executing command %v %v...\n", name, args)
+	p.Outch <- p.Sprintf("Executing local command %v %v...\n", name, args)
 	err = session.Run()
-	if err != nil {
-		p.Kill()
-	}
 	return
 }
 
@@ -183,7 +181,7 @@ func (p *Program) runRemoteCommand(cmd string) (err error) {
 	session, _ := p.client.NewSession()
 	_, stdout, stderr, errstr := remoteStandardio(session)
 	if errstr != "" {
-		p.Errch <- p.Sprintf(errstr)
+		p.Errch <- p.Sprintf("%v\n", errstr)
 		p.Kill()
 	}
 
@@ -201,12 +199,12 @@ func (p *Program) runRemoteCommand(cmd string) (err error) {
 			case s, ok = <-chout:
 				if ok {
 					appendLog(p.outlog, s, p.Config)
-					p.Outch <- p.Sprintf("%v", s)
+					p.Outch <- p.Sprintf("%v\n", s)
 				}
 			case s, ok = <-cherr:
 				if ok {
 					appendLog(p.errlog, s, p.Config)
-					p.Errch <- p.Sprintf("%v", s)
+					p.Errch <- p.Sprintf("%v\n", s)
 				}
 			case <-p.quit:
 				ok = false
@@ -228,11 +226,8 @@ func (p *Program) runRemoteCommand(cmd string) (err error) {
 		msg := fmt.Sprintf("request for pseudo terminal failed: %s", err)
 		p.Errch <- p.Sprintf("Error: %v\n", msg)
 	}
-	p.Outch <- p.Sprintf("Executing command %v ...", cmd)
+	p.Outch <- p.Sprintf("Executing remote command %v ...\n", cmd)
 	err = session.Run(cmd)
-	if err != nil {
-		p.Kill()
-	}
 	return err
 }
 
