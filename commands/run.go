@@ -61,7 +61,7 @@ func (cmd *RunCommand) indexArgParse(line string) (err error) {
 		"Specify configuration file")
 	f.StringVar(&runOption.program, "p", "",
 		"Specify program to run or restart")
-	err = f.Parse(api.ParseCmd(line)[1:])
+	err = f.Parse(api.ParseScript(line)[0][1:])
 	return
 }
 

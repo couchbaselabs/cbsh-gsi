@@ -1,19 +1,20 @@
 package commands
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"github.com/couchbaselabs/cbsh/api"
 	"github.com/couchbaselabs/cbsh/shells"
 )
 
-var ppCbshOption struct {
+type ppOptions struct {
 	pool   bool
 	bucket bool
 }
 
-var ppDescription = `Pretty print json documents and internal data structure`
-var ppHelp = `
+const ppDescription = `Pretty print json documents and internal data structure`
+const ppHelp = `
 for Cbsh shell:
     pp [-pool] [-bucket]
 
@@ -31,7 +32,13 @@ func (cmd *PpCommand) Description() string {
 }
 
 func (cmd *PpCommand) Help() string {
-	return ppHelp
+	var fl *flag.FlagSet
+	options := ppOptions{}
+	fl = cmd.argParse(&options, []string{})
+	buf := bytes.NewBuffer([]byte{})
+	fl.SetOutput(buf)
+	fl.PrintDefaults()
+	return ppHelp + string(buf.Bytes())
 }
 
 func (cmd *PpCommand) Shells() []string {
@@ -55,48 +62,39 @@ func (cmd *PpCommand) Interpret(c *api.Context) (err error) {
 	return
 }
 
-func (cmd *PpCommand) cbshArgParse(line string) (err error) {
-	f := flag.NewFlagSet("ppcbsh", flag.ContinueOnError)
-	f.BoolVar(&ppCbshOption.pool, "pool", false,
+func (cmd *PpCommand) argParse(options *ppOptions, args []string) *flag.FlagSet {
+	fl := flag.NewFlagSet("ppcbsh", flag.ContinueOnError)
+	fl.BoolVar(&options.pool, "pool", false,
 		"Pretty print current pool details")
-	f.BoolVar(&ppCbshOption.bucket, "bucket", false,
+	fl.BoolVar(&options.bucket, "bucket", false,
 		"Pretty print current bucket details")
-	return f.Parse(api.ParseCmd(line)[1:])
-}
-
-func (cmd *PpCommand) indexArgParse(line string) (err error) {
-	f := flag.NewFlagSet("ppindex", flag.ContinueOnError)
-	return f.Parse(api.ParseCmd(line)[1:])
-}
-
-func (cmd *PpCommand) n1qlArgParse(line string) (err error) {
-	f := flag.NewFlagSet("ppn1ql", flag.ContinueOnError)
-	return f.Parse(api.ParseCmd(line)[1:])
+	fl.Parse(args)
+	return fl
 }
 
 func (cmd *PpCommand) ppForCbsh(cbsh *shells.Cbsh, c *api.Context) (err error) {
 	var s string
 
-	cmd.indexArgParse(c.Line)
+	args, _ := api.ParseCmdline(c.Line)
+	options := ppOptions{}
+	cmd.argParse(&options, args[1:])
 
 	switch {
-	case ppCbshOption.bucket:
+	case options.bucket:
 		s, err = api.PrettyPrint(*cbsh.Bucket, "")
 		fmt.Fprintln(c.W, s)
-	case ppCbshOption.pool:
+	case options.pool:
 		s, err = api.PrettyPrint(cbsh.Pool, "")
 		fmt.Fprintln(c.W, s)
 	}
 	return
 }
 
-func (cmd *PpCommand) ppForIndex(index *shells.Indexsh,
-	c *api.Context) (err error) {
+func (cmd *PpCommand) ppForIndex(index *shells.Indexsh, c *api.Context) (err error) {
 	return
 }
 
-func (cmd *PpCommand) ppForN1ql(n1ql *shells.N1qlsh,
-	c *api.Context) (err error) {
+func (cmd *PpCommand) ppForN1ql(n1ql *shells.N1qlsh, c *api.Context) (err error) {
 	return
 }
 

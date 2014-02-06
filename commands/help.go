@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-var helpDescription = `Detailed help on individual commands`
-var helpHelp = `
+const helpDescription = `Detailed help on individual commands`
+const helpHelp = `
     help [command-name]
 
 show short description of command, long description of it and shells in which
@@ -38,13 +38,13 @@ func (cmd *HelpCommand) Complete(c *api.Context, cursor int) []string {
 }
 
 func (cmd *HelpCommand) Interpret(c *api.Context) (err error) {
-	parts := api.SplitArgs(c.Line, " ")
-	if len(parts) < 2 {
+	toks := api.CommandLineTokens(c.Line)
+	if len(toks) < 2 {
 		for _, cmd := range c.Commands {
-			fmt.Fprintf(c.W, "%-15s %s\n", cmd.Name(), cmd.Description())
+			fmt.Fprintf(c.W, "  %-15s %s\n", cmd.Name(), cmd.Description())
 		}
 	} else {
-		cmd := c.Commands[parts[1]]
+		cmd := c.Commands[toks[1]]
 		fmt.Fprintln(c.W, api.Yellow(cmd.Description()))
 		help := cmd.Help()
 		if len(strings.Trim(help, " \t\n\r")) > 0 {

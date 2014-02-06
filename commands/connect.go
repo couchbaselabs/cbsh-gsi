@@ -6,14 +6,16 @@ import (
 	"github.com/couchbaselabs/cbsh/shells"
 )
 
-var connectDescription = `Connect with kv-cluster`
-var connectHelp = `
+const connectDescription = `Connect with kv-cluster`
+const connectHelp = `
     connect <url> [poolname] [bucketname]
 
 connect to a server, specified by <url> in kv-cluster. If optional argument
 [poolname] is supplied, change to pool. If optional argument
 [bucketname] is supplied, change to bucket.
 `
+const defaultPool = "default"
+const defaultBucket = "default"
 
 type ConnectCommand struct{}
 
@@ -46,25 +48,35 @@ func (cmd *ConnectCommand) Interpret(c *api.Context) (err error) {
 	return
 }
 
+// Local functions
+
 func connectForCbsh(cbsh *shells.Cbsh, c *api.Context) (err error) {
 	// Close existing client connection
 	if cbsh.Bucket != nil {
 		cbsh.Bucket.Close()
 	}
 
-	parts := api.SplitArgs(c.Line, " ")
-	if len(parts) < 2 {
+	toks, _ := api.ParseCmdline(c.Line)
+	if len(toks) < 2 {
 		return fmt.Errorf("Need argument to connect")
 	} else {
-		cbsh.Url = parts[1]
+		cbsh.Url = toks[1]
 	}
-	if len(parts) > 2 {
-		cbsh.Poolname = parts[2]
+
+	cbsh.Poolname = defaultPool
+	if len(toks) > 2 {
+		cbsh.Poolname = toks[2]
 	}
-	if len(parts) > 3 {
-		cbsh.Bucketname = parts[3]
+
+	cbsh.Bucketname = defaultBucket
+	if len(toks) > 3 {
+		cbsh.Bucketname = toks[3]
 	}
-	return cbsh.Connect(c)
+
+	if err = cbsh.Connect(c); err == nil {
+		fmt.Fprintln(c.W, "Connected to :", cbsh.Prompt())
+	}
+	return
 }
 
 func init() {

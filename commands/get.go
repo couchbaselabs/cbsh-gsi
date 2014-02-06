@@ -6,8 +6,8 @@ import (
 	"github.com/couchbaselabs/cbsh/shells"
 )
 
-var getDescription = `Get key,value from current bucket`
-var getHelp = `
+const getDescription = `Get key,value from current bucket`
+const getHelp = `
     get <key>
 
 get the value for <key> from current bucket.

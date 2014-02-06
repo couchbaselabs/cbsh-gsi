@@ -4,7 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/couchbaselabs/cbsh/api"
-	"github.com/couchbaselabs/go-couchbase"
+	"github.com/prataprc/go-couchbase"
 	"net/url"
 	"path"
 )
@@ -22,6 +22,8 @@ type Cbsh struct {
 	U          *url.URL // url used to connect to the server
 	CommandList
 }
+
+//---- ShellHandler method receivers
 
 func (cbsh *Cbsh) Description() string {
 	return cbDescription
@@ -65,6 +67,8 @@ func (cbsh *Cbsh) Handle(c *api.Context) (err error) {
 	return
 }
 
+// Exported methods specific to cbsh and needed by several commands.
+
 func (cbsh *Cbsh) Close(c *api.Context) {
 	fmt.Fprintf(c.W, "Exiting shell : %v\n", cbsh.Name())
 }
@@ -79,15 +83,17 @@ func (cbsh *Cbsh) Connect(c *api.Context) (err error) {
 		cbsh.U, cbsh.Bucket = nil, nil
 		return
 	}
-	// Connect to pool
-	if cbsh.Pool, err = cbsh.Client.GetPool(cbsh.Poolname); err != nil {
-		cbsh.U, cbsh.Bucket = nil, nil
-		return
+	if cbsh.Poolname != "" { // Connect to pool
+		if cbsh.Pool, err = cbsh.Client.GetPool(cbsh.Poolname); err != nil {
+			cbsh.U, cbsh.Bucket = nil, nil
+			return
+		}
 	}
-	// Connect to bucket
-	if cbsh.Bucket, err = cbsh.Pool.GetBucket(cbsh.Bucketname); err != nil {
-		cbsh.U, cbsh.Bucket = nil, nil
-		return
+	if cbsh.Bucketname != "" { // Connect to bucket
+		if cbsh.Bucket, err = cbsh.Pool.GetBucket(cbsh.Bucketname); err != nil {
+			cbsh.U, cbsh.Bucket = nil, nil
+			return
+		}
 	}
 	return
 }

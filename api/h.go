@@ -7,6 +7,7 @@ import (
 	"path"
 	"reflect"
 	"strings"
+	"text/scanner"
 )
 
 // get user's home directory
@@ -49,6 +50,19 @@ func PrettyPrint(obj interface{}, attr string) (s string, err error) {
 	return
 }
 
+func CommandLineTokens(line string) []string {
+	var s scanner.Scanner
+	toks := make([]string, 0, 8)
+
+	s.Init(strings.NewReader(line))
+	tok := s.Scan()
+	for tok != scanner.EOF {
+		toks = append(toks, s.TokenText())
+		tok = s.Scan()
+	}
+	return toks
+}
+
 func SplitArgs(argstr string, sep string) []string {
 	parts := strings.Split(strings.Trim(argstr, " "), sep)
 	return trimArgs(parts)
@@ -79,22 +93,37 @@ func IsCommand(cmdname string, commands CommandMap) bool {
 	return false
 }
 
-func ParseCmd(s string) []string {
-	args := make([]string, 0)
-	for _, s := range strings.Split(s, "\n") {
+func ParseScript(s string) [][]string {
+	cmdsargs := make([][]string, 0)
+	for _, s := range strings.Split(s, SEP) {
 		if strings.Trim(s, " ") == "" {
 			continue
 		}
-		args = append(args, ParseCmdline(s)...)
+		cmdsargs = append(cmdsargs, ParseCmdsline(s)...)
 	}
-	return args
+	return cmdsargs
 }
 
-func ParseCmdline(s string) []string {
+func ParseCmdsline(s string) [][]string {
+	cmdsargs := make([][]string, 0)
+	for {
+		args, remstr := ParseCmdline(s)
+		cmdsargs = append(cmdsargs, args)
+		if remstr == "" {
+			break
+		}
+	}
+	return cmdsargs
+}
+
+func ParseCmdline(s string) ([]string, string) {
+	var remstr string
+
 	args := make([]string, 0)
 	arg := make([]rune, 0)
 	inStr := false
-	for _, x := range s {
+
+	for i, x := range s {
 		switch {
 		case inStr, x == '"':
 			args = append(args, string(arg))
@@ -106,6 +135,9 @@ func ParseCmdline(s string) []string {
 				args = append(args, string(arg))
 			}
 			arg = make([]rune, 0)
+		case x == ';':
+			remstr = s[i+1:]
+			break
 		default:
 			arg = append(arg, x)
 		}
@@ -113,7 +145,7 @@ func ParseCmdline(s string) []string {
 	if len(arg) > 0 {
 		args = append(args, string(arg))
 	}
-	return args
+	return args, remstr
 }
 
 func CreateFile(filepath string, force bool) (err error) {
