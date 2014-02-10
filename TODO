@@ -1,2 +1,7 @@
 - NEWLINE constant is operating system specific.
 - -config switch not working.
+- Help should also display argParse results for all commands under commands/
+  subdir.
+    func (cmd *KillCommand) Help() string {
+        return killHelp
+    }

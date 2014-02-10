@@ -22,6 +22,81 @@ func HomeDir() string {
 	return hdir
 }
 
+func ResolveFile(filename, dirname string) string {
+	switch {
+	case filename[0] == os.PathSeparator:
+		return filename
+	case dirname != "":
+		return path.Join(dirname, filename)
+	default:
+		cwd, _ := os.Getwd()
+		return path.Join(cwd, filename)
+	}
+}
+
+func Overlay(sources ...Config) (Config, error) {
+	var err error
+
+	if len(sources) == 0 {
+		return nil, nil
+	} else if len(sources) == 1 {
+		return sources[0], nil
+	}
+	dest := sources[0]
+	for _, source := range sources[1:] {
+		if dest, err = OverlayProperty(dest, source); err != nil {
+			return nil, err
+		}
+	}
+	return dest, nil
+}
+
+func OverlaySlice(one, two []interface{}) []interface{} {
+	sl := make([]interface{}, len(one)+len(two))
+	copy(sl, one)
+	copy(sl[len(one):], two)
+	return sl
+}
+
+func OverlayProperty(one, two Config) (Config, error) {
+	var err error
+
+	newconfig := make(Config)
+	for key, value := range one {
+		newconfig[key] = value
+	}
+	for key, value := range two {
+		if newconfig[key] == nil {
+			newconfig[key] = value
+			continue
+		}
+		switch value.(type) {
+		case int, float32, float64, string, bool:
+			newconfig[key] = value
+		case []interface{}:
+			if sl, ok := newconfig[key].([]interface{}); ok {
+				newconfig[key] = OverlaySlice(sl, value.([]interface{}))
+			} else {
+				err = fmt.Errorf("OverlayProperty: Key type expected slice")
+				return nil, err
+			}
+		case map[string]interface{}:
+			if m, ok := newconfig[key].(map[string]interface{}); ok {
+				newconfig[key], err = OverlayProperty(m, value.(Config))
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				err = fmt.Errorf("OverlayProperty: Key type expected property")
+				return nil, err
+			}
+		default:
+			return nil, fmt.Errorf("Unknown type %t", value)
+		}
+	}
+	return newconfig, nil
+}
+
 // PrettyPrint converts `obj` into human readable format that can be directly
 // rendered on the screen or file. If `attr` is not empty string and `obj` is
 // map or struct, then `attr` is treated as key-to-map or struct-field.
@@ -44,7 +119,9 @@ func PrettyPrint(obj interface{}, attr string) (s string, err error) {
 		default:
 			err = fmt.Errorf("Neither slice nor map")
 		}
-		bs, err = json.MarshalIndent(obj, "", "  ")
+		if bs, err = json.MarshalIndent(obj, "", "  "); err != nil {
+			return "", err
+		}
 		s = string(bs)
 	}
 	return
@@ -105,11 +182,14 @@ func ParseScript(s string) [][]string {
 }
 
 func ParseCmdsline(s string) [][]string {
+	var args []string
+
 	cmdsargs := make([][]string, 0)
 	for {
-		args, remstr := ParseCmdline(s)
+		args, s = ParseCmdline(s)
+		s = strings.Trim(s, " ")
 		cmdsargs = append(cmdsargs, args)
-		if remstr == "" {
+		if s == "" {
 			break
 		}
 	}
@@ -123,6 +203,7 @@ func ParseCmdline(s string) ([]string, string) {
 	arg := make([]rune, 0)
 	inStr := false
 
+loop:
 	for i, x := range s {
 		switch {
 		case inStr, x == '"':
@@ -137,7 +218,7 @@ func ParseCmdline(s string) ([]string, string) {
 			arg = make([]rune, 0)
 		case x == ';':
 			remstr = s[i+1:]
-			break
+			break loop
 		default:
 			arg = append(arg, x)
 		}

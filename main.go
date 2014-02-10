@@ -93,9 +93,13 @@ func doCommand(c *api.Context, line string) (err error) {
 	case strings.HasPrefix(line, api.SHELL_INDEX):
 		err = c.SetShell(c.Shells[api.SHELL_INDEX])
 	default:
-		c.Line = line
-		// Handle the command for the current shell
-		err = handleShellCommand(c)
+		for _, command := range api.ParseCmdsline(line) {
+			c.Line = strings.Join(command, " ")
+			// Handle the command for the current shell
+			if err = handleShellCommand(c); err != nil {
+				return
+			}
+		}
 	}
 	return
 }

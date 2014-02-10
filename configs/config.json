@@ -1,62 +1,13 @@
-{ "hosts"    : ["localhost"],
-  "programs" : {
-      "tuqtng"       : {
-          "host" : "localhost",
-          "user" : "prataprc",
-          "local" : [
-              ["scp", "-q",
-               "/Users/prataprc/devgo/src/github.com/couchbaselabs/tuqtng/tuqtng",
-               "localhost:~/devindex"
-              ]
-          ],
-          "remote" : [
-              "cd ~/devindex; ./tuqtng -couchbase http://localhost:9000 -log HTTP,NETWORK,PIPELE,CATALOG -dev"
-          ],
-          "log.color": "blue"
-      },
-      "indexer"       : {
-          "host" : "localhost",
-          "user" : "prataprc",
-          "local" : [
-              ["scp", "-q",
-               "/Users/prataprc/devgo/src/github.com/couchbaselabs/indexing/indexer/indexer",
-               "localhost:~/devindex"
-              ]
-          ],
-          "remote" : [
-              "cd ~/devindex; ./indexer"
-          ],
-          "log.color": "yellow"
-      },
-      "index_manager" : {
-          "host" : "localhost",
-          "user" : "prataprc",
-          "local" : [
-              ["scp", "-q",
-               "/Users/prataprc/devgo/src/github.com/couchbaselabs/indexing/index_manager/index_manager",
-               "localhost:~/devindex"
-              ]
-          ],
-          "remote" : [
-              "cd ~/devindex; ./index_manager"
-          ],
-          "log.color": "cyan"
-      },
-      "projector"       : {
-          "host" : "localhost",
-          "user" : "prataprc",
-          "local" : [
-              ["scp", "-q",
-               "/Users/prataprc/devgo/src/github.com/couchbaselabs/indexing/projector/projector",
-               "localhost:~/devindex"
-              ]
-          ],
-          "remote" : [
-              "cd ~/devindex; ./projector -kvhost localhost:9000 -imhost localhost:8094 -inhost localhost:8096"
-          ],
-          "log.color": "magenta"
-      }
-  },
+{ "GOPATH"   : "{{.HOME}}/devgo",
+  "user"     : "prataprc",
+  "include"  : [
+    "./tuqtngConfig.json",
+    "./indexerConfig.json",
+    "./indexManagerConfig.json",
+    "./projectorConfig.json"
+  ],
+  "ssh.pool.size"     : 4,
+  "ssh.pool.overflow" : 2,
   "log.maxsize"       : 10000,
   "log.stdout"        : true,
   "log.stdout.filter" : [],

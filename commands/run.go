@@ -5,25 +5,24 @@ import (
 	"fmt"
 	"github.com/couchbaselabs/cbsh/api"
 	"github.com/couchbaselabs/cbsh/shells"
-	"github.com/couchbaselabs/cbsh/sshc"
+	//"github.com/couchbaselabs/cbsh/sshc"
 )
 
 var runDescription = `Execute configuration for seconday index cluster`
 var runHelp = `
-    run [-c <config-file>]
+    run [-c configfile] [-i] [-if] <programnames>
 
-if [-c <config-file>] option is supplied, execute the specified configuration
-file as seconday index cluster, otherwise execute the configuration that was
-already selected using "config" command. In either case, if the cluster is
-already running a configuration, it is killed and the new configuration is
-executed.
+run specified programs. 'programnames' can be a single program name or list of
+program names separated by white-space.
 `
 
 type RunCommand struct{}
 
-var runOption struct {
-	configFile string
-	program    string
+type runOptions struct {
+	configfile   string
+	install      bool
+	forceinstall bool
+	programs     []string
 }
 
 func (cmd *RunCommand) Name() string {
@@ -48,58 +47,58 @@ func (cmd *RunCommand) Complete(c *api.Context, cursor int) []string {
 
 func (cmd *RunCommand) Interpret(c *api.Context) (err error) {
 	if idx, ok := c.Cursh.(*shells.Indexsh); ok {
-		err = cmd.runForIndex(idx, c)
+		args, _ := api.ParseCmdline(c.Line)
+		options := runOptions{}
+		fl := cmd.argParse(&options, args[1:])
+		options.programs = fl.Args()
+		err = runForIndex(idx, &options, c)
 	} else {
 		err = fmt.Errorf("Error: need to be in index-shell")
 	}
 	return
 }
 
-func (cmd *RunCommand) indexArgParse(line string) (err error) {
-	f := flag.NewFlagSet("run", flag.ContinueOnError)
-	f.StringVar(&runOption.configFile, "c", "",
-		"Specify configuration file")
-	f.StringVar(&runOption.program, "p", "",
-		"Specify program to run or restart")
-	err = f.Parse(api.ParseScript(line)[0][1:])
-	return
+// Local functions
+
+func (cmd *RunCommand) argParse(options *runOptions, args []string) *flag.FlagSet {
+	fl := flag.NewFlagSet("run", flag.ContinueOnError)
+	fl.StringVar(&options.configfile, "c", "",
+		"load configuration file before installing or running the program")
+	fl.BoolVar(&options.install, "i", false,
+		"install programs before running them")
+	fl.BoolVar(&options.forceinstall, "if", false,
+		"force install programs before running them")
+	fl.Parse(args)
+	return fl
 }
 
-func (cmd *RunCommand) runForIndex(idx *shells.Indexsh, c *api.Context) (err error) {
-	cmd.indexArgParse(c.Line)
+func runForIndex(idx *shells.Indexsh, options *runOptions, c *api.Context) (err error) {
 	switch {
-	case runOption.configFile != "":
-		if err = configForIndex(idx, c, runOption.configFile); err == nil {
-			runConfig(idx, c)
-		}
-	case idx.Config != nil && runOption.program != "":
-		for name, _ := range idx.Config["programs"].(map[string]interface{}) {
-			if name == runOption.program {
-				if p := idx.Programs[name]; p != nil {
-					p.Kill()
-				}
-				runProgram(idx, c, name)
-				break
-			}
+	case options.configfile != "":
+		if err = configForIndex(idx, c, options.configfile); err == nil {
+			runPrograms(idx, c, options.programs)
 		}
 	case idx.Config != nil:
-		runConfig(idx, c)
+		opts := installOptions{programs: options.programs}
+		if options.forceinstall {
+			opts.force = options.forceinstall
+		}
+		if options.forceinstall || options.install {
+			installForIndex(idx, &opts, c)
+		}
+		runPrograms(idx, c, options.programs)
+	default:
+		return fmt.Errorf("Configuration file not loaded")
 	}
 	return
 }
 
-func runConfig(idx *shells.Indexsh, c *api.Context) (err error) {
-	progConfigs := idx.Config["programs"].(map[string]interface{})
-	for name, _ := range progConfigs {
-		runProgram(idx, c, name)
+func runPrograms(idx *shells.Indexsh, c *api.Context, programs []string) (err error) {
+	for _, name := range programs {
+		idx.Fabric.KillProgram(name)
+		idx.Fabric.RunProgram(name, idx.Printch)
 	}
 	return
-}
-
-func runProgram(idx *shells.Indexsh, c *api.Context, name string) {
-	p := sshc.RunProgram(name, idx.Config)
-	idx.Programs[name] = p
-	go idx.GetLog(p, c)
 }
 
 func init() {

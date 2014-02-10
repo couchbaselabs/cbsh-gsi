@@ -6,321 +6,234 @@ import (
 	"fmt"
 	"github.com/couchbaselabs/cbsh/api"
 	"io"
-	"net"
-	"os"
-	"os/exec"
+	"strings"
+	"sync"
 )
 
-type Log struct {
-	lines  []string
-	cursor int
+// TODO: lock protect Fabric.pools and Fabric.programs
+
+type outStr chan<- string // for stdout and stderr
+type inStr <-chan string  // for stdin
+
+type remoteCommand struct {
+	host    string
+	user    string
+	environ api.Environ
+	command string
+	inch    <-chan string
+	outch   outStr
+	errch   outStr
 }
 
-type localCommand struct {
-	name string
-	args []string
+// Fabric is an instance of cluster managment.
+type Fabric struct {
+	Config   api.Config
+	mu       sync.Mutex
+	pools    map[string]*connectionPool
+	programs map[string]*Program
 }
 
-type Program struct {
-	Name   string
-	Outch  chan string
-	Errch  chan string
-	Config map[string]interface{}
-	config map[string]interface{}
-	outlog *Log
-	errlog *Log
-	client *ssh.ClientConn
-	host   string
-	user   string
-	local  []localCommand
-	remote []string
-	quit   chan bool
-}
-
-type stdPlumber interface {
-	StderrPipe() (io.ReadCloser, error)
-	StdinPipe() (io.WriteCloser, error)
-	StdoutPipe() (io.ReadCloser, error)
-}
-
-var fabprog = Program{
-	Name:   "fab",
-	local:  make([]localCommand, 0),
-	remote: make([]string, 0),
-}
-
-func RunProgram(name string, conf map[string]interface{}) *Program {
-	programs := conf["programs"].(map[string]interface{})
-	progConfig := (programs[name]).(map[string]interface{})
-	logMaxSize := int(conf["log.maxsize"].(float64))
-	// construct the program structure
-	program := Program{
-		Name:   name,
-		Config: conf,
-		Outch:  make(chan string),
-		Errch:  make(chan string),
-		quit:   make(chan bool),
-		config: progConfig,
-		host:   progConfig["host"].(string),
-		user:   progConfig["user"].(string),
-		local:  localCommands(progConfig["local"].([]interface{})),
-		remote: remoteCommands(progConfig["remote"].([]interface{})),
-		outlog: &Log{lines: make([]string, logMaxSize)},
-		errlog: &Log{lines: make([]string, logMaxSize)},
+// StartFabric creates a new instace of cluster management.
+func StartFabric(config api.Config) (*Fabric, error) {
+	fabric := Fabric{
+		Config:   config,
+		pools:    make(map[string]*connectionPool),
+		programs: make(map[string]*Program),
 	}
+	return &fabric, nil
+}
 
-	// ssh-agent
-	agent_sock, err := net.Dial("unix", os.Getenv("SSH_AUTH_SOCK"))
+// IsHealthy return whether fabric is a healthy state.
+func (fabric *Fabric) IsHealthy() bool {
+	return fabric != nil
+}
+
+// Atomically get a running program's managment structure from running-list
+func (fabric *Fabric) GetProgram(name string) *Program {
+	fabric.mu.Lock()
+	defer fabric.mu.Unlock()
+	if fabric.programs != nil {
+		return fabric.programs[name]
+	}
+	return nil
+}
+
+// Atomically set a program's managment structure to running-list.
+func (fabric *Fabric) SetProgram(name string, p *Program) {
+	fabric.mu.Lock()
+	defer fabric.mu.Unlock()
+	if fabric.programs != nil {
+		fabric.programs[name] = p
+	}
+}
+
+// Atomically delete a program's management structure from running-list
+func (fabric *Fabric) DeleteProgram(name string) {
+	fabric.mu.Lock()
+	defer fabric.mu.Unlock()
+	if fabric.programs != nil {
+		delete(fabric.programs, name)
+	}
+}
+
+// Atomically get a connection pool for host
+func (fabric *Fabric) GetPool(host string) *connectionPool {
+	fabric.mu.Lock()
+	defer fabric.mu.Unlock()
+	if fabric.pools != nil {
+		return fabric.pools[host]
+	}
+	return nil
+}
+
+// Atomically set a connection pool for host
+func (fabric *Fabric) SetPool(host string, cp *connectionPool) {
+	fabric.mu.Lock()
+	defer fabric.mu.Unlock()
+	if fabric.pools != nil {
+		fabric.pools[host] = cp
+	}
+}
+
+// Atomically delete a connection pool for host
+func (fabric *Fabric) DeletePool(host string) {
+	fabric.mu.Lock()
+	defer fabric.mu.Unlock()
+	if fabric.pools != nil {
+		delete(fabric.pools, host)
+	}
+}
+
+func (fabric *Fabric) Close() {
+	fabric.mu.Lock()
+	defer fabric.mu.Unlock()
+	for _, cp := range fabric.pools {
+		cp.Close()
+	}
+	for _, p := range fabric.programs {
+		p.Kill()
+	}
+	fabric.pools, fabric.programs = nil, nil
+}
+
+func (fabric *Fabric) ExecRemoteCommand(cmd *remoteCommand) (err error) {
+	var client *ssh.ClientConn
+	var cp *connectionPool
+
+	// Get connection pool for `host`
+	if cp, err = fabric.getConnectionPool(cmd.host, cmd.user); err != nil {
+		return
+	}
+	if client, err = cp.Get(); err != nil {
+		return
+	}
+	// Get ssh session
+	session, _ := client.NewSession()
+	stdin, stdout, stderr, err := remoteStandardio(session)
 	if err != nil {
-		panic(err)
+		return
 	}
-	defer agent_sock.Close()
-
-	// ssh-client
-	config := &ssh.ClientConfig{
-		User: program.user,
-		Auth: []ssh.ClientAuth{
-			ssh.ClientAuthAgent(ssh.NewAgentClient(agent_sock)),
-		},
+	//modes := ssh.TerminalModes{
+	//    ssh.ECHO:          0,     // disable echoing
+	//    ssh.TTY_OP_ISPEED: 14400, // input speed = 14.4kbaud
+	//    ssh.TTY_OP_OSPEED: 14400, // output speed = 14.4kbaud
+	//}
+	//if err = session.RequestPty("xterm", 80, 40, modes); err != nil {
+	//    return
+	//}
+	// Setup stdin, stdout & stderr readers
+	if cmd.inch != nil {
+		go writeIn(stdin, cmd.inch, cmd.errch)
 	}
-	dest := program.host + ":22"
-	program.client, err = ssh.Dial("tcp", dest, config)
-	if err != nil {
-		panic(err)
+	if cmd.outch != nil {
+		go readOut(stdout, cmd.outch, false)
 	}
-	go program.runProgram()
-	return &program
+	if cmd.errch != nil {
+		go readOut(stderr, cmd.errch, false)
+	}
+	// Setup remote's environment and run the command
+	if err = setEnviron(cmd.environ, session); err == nil {
+		err = session.Run(cmd.command)
+	}
+	if err != nil && cmd.errch != nil {
+		cmd.errch <- fmt.Sprintln(err)
+	}
+	session.Signal(ssh.SIGTERM)
+	session.Close()
+	cp.Return(client)
+	return
 }
 
-func Killall(programs []*Program) {
-	for _, p := range programs {
+func (fabric *Fabric) MakeRemoteDirs(host, user, dir string, ch outStr) (err error) {
+	command := fmt.Sprintf("mkdir -p %v", dir)
+	ch <- fmt.Sprintf("Creating directory %q\n", dir)
+	cmd := &remoteCommand{
+		host: host, user: user, command: command, outch: ch, errch: ch}
+	err = fabric.ExecRemoteCommand(cmd)
+	return err
+}
+
+func (fabric *Fabric) RemoveRemoteDir(host, user, dir string, ch outStr) (err error) {
+	command := fmt.Sprintf("rm -rf %v", dir)
+	ch <- fmt.Sprintf("Removing directory %q\n", dir)
+	cmd := &remoteCommand{
+		host: host, user: user, command: command, outch: ch, errch: ch}
+	err = fabric.ExecRemoteCommand(cmd)
+	return err
+}
+
+func (fabric *Fabric) IsDir(host, user, dir string) bool {
+	command := fmt.Sprintf(`eval 'if [ -d %v ]; then echo "true"; else echo "false"; fi'`, dir)
+	ch := make(chan string)
+	cmd := &remoteCommand{host: host, user: user, command: command, outch: ch}
+	go func() {
+		fabric.ExecRemoteCommand(cmd)
+	}()
+	s, _ := <-ch
+	s = strings.Trim(s, "\n")
+	close(ch)
+	if s == "true" {
+		return true
+	}
+	return false
+}
+
+func (fabric *Fabric) Killall() {
+	fabric.mu.Lock()
+	defer fabric.mu.Unlock()
+	for _, p := range fabric.programs {
 		if p != nil {
 			p.Kill()
 		}
 	}
 }
 
-func (p *Program) Kill() {
-	if p.client != nil {
-		p.Outch <- p.Sprintf("Getting Killed\n")
-		close(p.quit)
-		p.client.Close()
-		close(p.Outch)
-		close(p.Errch)
-		p.client = nil
-	}
-}
-
-func (p *Program) IsRunning() bool {
-	return p.client != nil
-}
-
-func (p *Program) runProgram() {
-	var err error
-	for _, cmd := range p.local {
-		if err = p.runLocalCommand(cmd.name, cmd.args); err != nil {
-			break
-		}
-	}
-	if err == nil {
-		for _, cmd := range p.remote {
-			if err = p.runRemoteCommand(cmd); err != nil {
-				break
-			}
-		}
-	}
-	if err != nil {
+func (fabric *Fabric) KillProgram(progname string) error {
+	fabric.mu.Lock()
+	defer fabric.mu.Unlock()
+	if p := fabric.programs[progname]; p != nil {
 		p.Kill()
+		delete(fabric.programs, progname)
+		return nil
 	}
+	return fmt.Errorf("Program name %v not found", progname)
 }
 
-func (p *Program) runLocalCommand(name string, args []string) (err error) {
-	// Create a command session
-	session := exec.Command(name, args...)
-	_, stdout, stderr, errstr := localStandardio(session)
-	if errstr != "" {
-		p.Errch <- p.Sprintf("%v\n", errstr)
-		p.Kill()
-	}
-
-	chout := make(chan string)
-	cherr := make(chan string)
-	go readOut(chout, stdout)
-	go readErr(cherr, stderr)
-
-	go func() {
-		var s string
-		var ok bool
-	loop:
-		for {
-			select {
-			case s, ok = <-chout:
-				if ok {
-					p.Outch <- p.Sprintf("%v\n", s)
-				}
-			case s, ok = <-cherr:
-				if ok {
-					p.Errch <- p.Sprintf("%v\n", s)
-				}
-			case <-p.quit:
-				ok = false
-			}
-			if ok == false {
-				break loop
-			}
+func (fabric *Fabric) getConnectionPool(host, user string) (*connectionPool, error) {
+	cp := fabric.GetPool(host)
+	if cp == nil {
+		poolSize := fabric.Config.SshPoolSize()
+		poolOverflow := fabric.Config.SshPoolOverflow()
+		cp = newConnectionPool(host, user, poolSize, poolOverflow)
+		if cp == nil {
+			return nil, fmt.Errorf("Unable to create pool for %v", host)
 		}
-	}()
-
-	p.Outch <- p.Sprintf("Executing local command %v %v...\n", name, args)
-	err = session.Run()
-	return
+		fabric.SetPool(host, cp)
+	}
+	return cp, nil
 }
 
-func (p *Program) runRemoteCommand(cmd string) (err error) {
-	// Create a session
-	session, _ := p.client.NewSession()
-	_, stdout, stderr, errstr := remoteStandardio(session)
-	if errstr != "" {
-		p.Errch <- p.Sprintf("%v\n", errstr)
-		p.Kill()
-	}
-
-	chout := make(chan string)
-	cherr := make(chan string)
-	go readOut(chout, stdout)
-	go readErr(cherr, stderr)
-
-	go func() {
-		var s string
-		var ok bool
-	loop:
-		for {
-			select {
-			case s, ok = <-chout:
-				if ok {
-					appendLog(p.outlog, s, p.Config)
-					p.Outch <- p.Sprintf("%v\n", s)
-				}
-			case s, ok = <-cherr:
-				if ok {
-					appendLog(p.errlog, s, p.Config)
-					p.Errch <- p.Sprintf("%v\n", s)
-				}
-			case <-p.quit:
-				ok = false
-			}
-			if ok == false {
-				session.Signal(ssh.SIGTERM)
-				session.Close()
-				break loop
-			}
-		}
-	}()
-
-	modes := ssh.TerminalModes{
-		ssh.ECHO:          0,     // disable echoing
-		ssh.TTY_OP_ISPEED: 14400, // input speed = 14.4kbaud
-		ssh.TTY_OP_OSPEED: 14400, // output speed = 14.4kbaud
-	}
-	if err = session.RequestPty("xterm", 80, 40, modes); err != nil {
-		msg := fmt.Sprintf("request for pseudo terminal failed: %s", err)
-		p.Errch <- p.Sprintf("Error: %v\n", msg)
-	}
-	p.Outch <- p.Sprintf("Executing remote command %v ...\n", cmd)
-	err = session.Run(cmd)
-	return err
-}
-
-func (p *Program) Sprintf(format string, args ...interface{}) string {
-	var prefix string
-	colorstr, ok := p.config["log.color"].(string)
-	if !ok {
-		colorstr = ""
-	}
-	switch colorstr {
-	case "black":
-		prefix = fmt.Sprintf("[%v] ", api.Black(p.Name))
-	case "red":
-		prefix = fmt.Sprintf("[%v] ", api.Red(p.Name))
-	case "green":
-		prefix = fmt.Sprintf("[%v] ", api.Green(p.Name))
-	case "blue":
-		prefix = fmt.Sprintf("[%v] ", api.Blue(p.Name))
-	case "magenta":
-		prefix = fmt.Sprintf("[%v] ", api.Magenta(p.Name))
-	case "cyan":
-		prefix = fmt.Sprintf("[%v] ", api.Cyan(p.Name))
-	case "white":
-		prefix = fmt.Sprintf("[%v] ", api.White(p.Name))
-	case "yellow":
-		prefix = fmt.Sprintf("[%v] ", api.Yellow(p.Name))
-	default:
-		prefix = fmt.Sprintf("[%v] ", p.Name)
-	}
-	s := fmt.Sprintf(format, args...)
-	return prefix + s
-}
-
-func appendLog(log *Log, s string, config map[string]interface{}) {
-	maxsize := int(config["log.maxsize"].(float64))
-	l := len(log.lines)
-	if len(log.lines) >= maxsize {
-		copy(log.lines[1:], log.lines[:l-1])
-		log.lines[0] = s
-	}
-	if log.cursor < (maxsize - 1) {
-		log.cursor += 1
-	}
-}
-
-func remoteCommands(vs []interface{}) []string {
-	ss := make([]string, 0)
-	for _, v := range vs {
-		ss = append(ss, v.(string))
-	}
-	return ss
-}
-
-func localCommands(vs []interface{}) []localCommand {
-	cmds := make([]localCommand, 0)
-	for _, cs := range vs {
-		ss := make([]string, 0)
-		for _, c := range cs.([]interface{}) {
-			ss = append(ss, c.(string))
-		}
-		if len(ss) > 0 {
-			cmds = append(cmds, localCommand{name: ss[0], args: ss[1:]})
-		}
-	}
-	return cmds
-}
-
-func localStandardio(
-	s *exec.Cmd) (io.WriteCloser, io.ReadCloser, io.ReadCloser, string) {
-
-	var stdin io.WriteCloser
-	var stdout io.ReadCloser
-	var stderr io.ReadCloser
-	var err error
-
-	// plumb into standard input
-	if stdin, err = s.StdinPipe(); err != nil {
-		return nil, nil, nil, fmt.Sprintf("Error: %v\n", err)
-	}
-	// plumb into standard output
-	if stdout, err = s.StdoutPipe(); err != nil {
-		return nil, nil, nil, fmt.Sprintf("Error: %v\n", err)
-	}
-	// plumb into standard error
-	if stderr, err = s.StderrPipe(); err != nil {
-		return nil, nil, nil, fmt.Sprintf("Error: %v\n", err)
-	}
-	return stdin, stdout, stderr, ""
-}
-
-func remoteStandardio(
-	s *ssh.Session) (io.WriteCloser, io.Reader, io.Reader, string) {
-
+func remoteStandardio(s *ssh.Session) (io.WriteCloser, io.Reader, io.Reader, error) {
 	var stdin io.WriteCloser
 	var stdout io.Reader
 	var stderr io.Reader
@@ -328,39 +241,55 @@ func remoteStandardio(
 
 	// plumb into standard input
 	if stdin, err = s.StdinPipe(); err != nil {
-		return nil, nil, nil, fmt.Sprintf("Error: %v\n", err)
+		return nil, nil, nil, fmt.Errorf("Error: %v\n", err)
 	}
 	// plumb into standard output
 	if stdout, err = s.StdoutPipe(); err != nil {
-		return nil, nil, nil, fmt.Sprintf("Error: %v\n", err)
+		return nil, nil, nil, fmt.Errorf("Error: %v\n", err)
 	}
 	// plumb into standard error
 	if stderr, err = s.StderrPipe(); err != nil {
-		return nil, nil, nil, fmt.Sprintf("Error: %v\n", err)
+		return nil, nil, nil, fmt.Errorf("Error: %v\n", err)
 	}
-	return stdin, stdout, stderr, ""
+	return stdin, stdout, stderr, nil
 }
 
-func readOut(ch chan string, stdout io.Reader) {
-	r := bufio.NewReader(stdout)
+func readOut(rd io.Reader, ch outStr, doclose bool) {
+	r := bufio.NewReader(rd)
 	for {
-		if buf, err := r.ReadBytes(api.NEWLINE); len(buf) > 0 {
+		if buf, _ := r.ReadBytes(api.NEWLINE); len(buf) > 0 {
 			ch <- string(buf)
-		} else if err != nil {
-			close(ch)
-			return
+		} else {
+			if doclose {
+				close(ch)
+			}
+			break
 		}
 	}
 }
 
-func readErr(ch chan string, stderr io.Reader) {
-	r := bufio.NewReader(stderr)
+func writeIn(w io.WriteCloser, inch inStr, errch outStr) {
 	for {
-		if buf, err := r.ReadBytes(api.NEWLINE); len(buf) > 0 {
-			ch <- string(buf)
-		} else if err != nil {
-			close(ch)
-			return
+		if s, ok := <-inch; ok {
+			bs := []byte(s)
+			if _, err := w.Write(bs); err != nil {
+				errch <- fmt.Sprintln(err)
+			}
+		} else {
+			w.Close()
+			break
 		}
 	}
+}
+
+func setEnviron(environ api.Environ, session *ssh.Session) (err error) {
+	//if environ != nil {
+	//    for key, value := range environ {
+	//        if err = session.Setenv(key, value); err != nil {
+	//            fmt.Println(10, key, value)
+	//            return
+	//        }
+	//    }
+	//}
+	return
 }

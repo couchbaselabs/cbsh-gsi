@@ -1,11 +1,11 @@
 package commands
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/couchbaselabs/cbsh/api"
 	"github.com/couchbaselabs/cbsh/shells"
-	"io/ioutil"
+	"github.com/couchbaselabs/cbsh/sshc"
+	"os"
 )
 
 var configDescription = `Choose a configuration file for secondary index`
@@ -50,19 +50,23 @@ func (cmd *ConfigCommand) Interpret(c *api.Context) (err error) {
 	return
 }
 
-func configForIndex(idx *shells.Indexsh, c *api.Context,
-	fname string) (err error) {
-	var data []byte
-
+func configForIndex(idx *shells.Indexsh, c *api.Context, fname string) (err error) {
 	idx.ConfigFile = fname
-	if data, err = ioutil.ReadFile(fname); err == nil {
-		err = json.Unmarshal(data, &idx.Config)
-	}
-	idx.Killall(c)
-	if err == nil {
+	context := getContext()
+	if idx.Config, err = api.LoadConfig(context, fname, ""); err == nil {
 		fmt.Fprintf(c.W, "Loaded config %q ...\n", idx.ConfigFile)
+		if idx.Fabric != nil {
+			idx.Fabric.Close()
+		}
+		idx.Fabric, err = sshc.StartFabric(idx.Config)
 	}
 	return
+}
+
+func getContext() api.Config {
+	return map[string]interface{}{
+		"HOME": os.Getenv("HOME"),
+	}
 }
 
 func init() {

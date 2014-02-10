@@ -1,0 +1,26 @@
+{ "programs" : [{
+      "name"       : "tuqtng",
+      "targethost" : "localhost",
+      "targetroot" : "{{.HOME}}/plan/src/github.com",
+      "environ"  : {
+        "GOPATH" : "{{.HOME}}/plan:$GOPATH"
+      },
+      "repository" : [
+        { "source"   : "ssh://{{.user}}@{{.targethost}}/Users/prataprc/devgo/src/github.com/couchbaselabs/tuqtng",
+          "target"   : "{{.targetroot}}/couchbaselabs/tuqtng",
+          "install"  : [
+            "cd {{.target}}; GOPATH={{.HOME}}/plan:{{.GOPATH}} $GOROOT/bin/go get .",
+            "cd {{.target}}; GOPATH={{.HOME}}/plan:{{.GOPATH}} $GOROOT/bin/go build"
+          ],
+          "uninstall": []
+        }
+      ],
+      "command"     : "{{.targetroot}}/couchbaselabs/tuqtng/tuqtng",
+      "commandargs" : [
+        "-couchbase http://{{.targethost}}:9000",
+        "-log HTTP,NETWORK,PIPELE,CATALOG",
+        "-dev"
+      ],
+      "log.color": "blue"
+  }]
+}
