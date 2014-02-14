@@ -17,6 +17,6 @@
       ],
       "command"     : "{{.targetroot}}/couchbaselabs/indexing/index_manager/index_manager",
       "commandargs" : [],
-      "log.color": "cyan"
+      "log.color"   : "cyan"
   }]
 }
