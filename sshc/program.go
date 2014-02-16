@@ -75,12 +75,14 @@ func (p *Program) runProgram() (err error) {
 		command: p.Config.ProgramCommand(p.Name),
 		outch:   chout,
 		errch:   cherr,
-	})
+		quit:    p.quit,
+	}, true)
 	return
 }
 
 func (p *Program) Kill() {
-	p.Outch <- p.Sprintf("Getting Killed")
+	defer func() { recover() }()
+	p.Outch <- p.Sprintf("Getting Killed\n")
 	close(p.quit)
 	p.healthy = false
 }

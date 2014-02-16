@@ -38,7 +38,7 @@ func (fabric *Fabric) InstallProgram(prog string, printch outStr, force bool) (e
 				command: command,
 				outch:   printch,
 				errch:   printch,
-			})
+			}, false)
 		}
 	}
 	return
@@ -66,7 +66,7 @@ func (fabric *Fabric) UninstallProgram(prog string, printch outStr) (err error) 
 				command: command,
 				outch:   printch,
 				errch:   printch,
-			})
+			}, false)
 		}
 	}
 	return
@@ -98,7 +98,7 @@ func (fabric *Fabric) CloneRepository(
 		command: command,
 		outch:   printch,
 		errch:   printch,
-	})
+	}, false)
 	return
 }
 
@@ -128,7 +128,7 @@ func (fabric *Fabric) PatchRepository(
 		inch:    inch,
 		outch:   printch,
 		errch:   printch,
-	})
+	}, false)
 	return
 }
 
@@ -164,7 +164,7 @@ func (fabric *Fabric) DiffRepository(
 				command: command,
 				outch:   diffch,
 				errch:   errch,
-			})
+			}, false)
 			if err != nil {
 				printch <- fmt.Sprintln(err)
 			}

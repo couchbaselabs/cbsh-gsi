@@ -20,9 +20,10 @@ type remoteCommand struct {
 	user    string
 	environ api.Environ
 	command string
-	inch    <-chan string
+	inch    chan string
 	outch   outStr
 	errch   outStr
+	quit    chan bool
 }
 
 // Fabric is an instance of cluster managment.
@@ -116,7 +117,7 @@ func (fabric *Fabric) Close() {
 	fabric.pools, fabric.programs = nil, nil
 }
 
-func (fabric *Fabric) ExecRemoteCommand(cmd *remoteCommand) (err error) {
+func (fabric *Fabric) ExecRemoteCommand(cmd *remoteCommand, daemon bool) (err error) {
 	var client *ssh.ClientConn
 	var cp *connectionPool
 
@@ -127,20 +128,23 @@ func (fabric *Fabric) ExecRemoteCommand(cmd *remoteCommand) (err error) {
 	if client, err = cp.Get(); err != nil {
 		return
 	}
+
 	// Get ssh session
 	session, _ := client.NewSession()
 	stdin, stdout, stderr, err := remoteStandardio(session)
 	if err != nil {
 		return
 	}
-	//modes := ssh.TerminalModes{
-	//    ssh.ECHO:          0,     // disable echoing
-	//    ssh.TTY_OP_ISPEED: 14400, // input speed = 14.4kbaud
-	//    ssh.TTY_OP_OSPEED: 14400, // output speed = 14.4kbaud
-	//}
-	//if err = session.RequestPty("xterm", 80, 40, modes); err != nil {
-	//    return
-	//}
+	if daemon {
+		modes := ssh.TerminalModes{
+			ssh.ECHO:          0,     // disable echoing
+			ssh.TTY_OP_ISPEED: 14400, // input speed = 14.4kbaud
+			ssh.TTY_OP_OSPEED: 14400, // output speed = 14.4kbaud
+		}
+		if err = session.RequestPty("xterm", 80, 40, modes); err != nil {
+			return
+		}
+	}
 	// Setup stdin, stdout & stderr readers
 	if cmd.inch != nil {
 		go writeIn(stdin, cmd.inch, cmd.errch)
@@ -153,10 +157,22 @@ func (fabric *Fabric) ExecRemoteCommand(cmd *remoteCommand) (err error) {
 	}
 	// Setup remote's environment and run the command
 	if err = setEnviron(cmd.environ, session); err == nil {
-		err = session.Run(cmd.command)
+		if daemon {
+			go func() {
+				defer func() { recover() }()
+				err = session.Run(cmd.command)
+				close(cmd.quit)
+			}()
+			<-cmd.quit
+		} else {
+			err = session.Run(cmd.command)
+		}
+		if err != nil && cmd.errch != nil {
+			cmd.errch <- fmt.Sprintln(err)
+		}
 	}
-	if err != nil && cmd.errch != nil {
-		cmd.errch <- fmt.Sprintln(err)
+	if cmd.inch != nil {
+		close(cmd.inch)
 	}
 	session.Signal(ssh.SIGTERM)
 	session.Close()
@@ -169,7 +185,7 @@ func (fabric *Fabric) MakeRemoteDirs(host, user, dir string, ch outStr) (err err
 	ch <- fmt.Sprintf("Creating directory %q\n", dir)
 	cmd := &remoteCommand{
 		host: host, user: user, command: command, outch: ch, errch: ch}
-	err = fabric.ExecRemoteCommand(cmd)
+	err = fabric.ExecRemoteCommand(cmd, false)
 	return err
 }
 
@@ -178,7 +194,7 @@ func (fabric *Fabric) RemoveRemoteDir(host, user, dir string, ch outStr) (err er
 	ch <- fmt.Sprintf("Removing directory %q\n", dir)
 	cmd := &remoteCommand{
 		host: host, user: user, command: command, outch: ch, errch: ch}
-	err = fabric.ExecRemoteCommand(cmd)
+	err = fabric.ExecRemoteCommand(cmd, false)
 	return err
 }
 
@@ -187,7 +203,7 @@ func (fabric *Fabric) IsDir(host, user, dir string) bool {
 	ch := make(chan string)
 	cmd := &remoteCommand{host: host, user: user, command: command, outch: ch}
 	go func() {
-		fabric.ExecRemoteCommand(cmd)
+		fabric.ExecRemoteCommand(cmd, false)
 	}()
 	s, _ := <-ch
 	s = strings.Trim(s, "\n")

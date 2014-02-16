@@ -39,7 +39,7 @@ func newConnectionPool(host, user string, poolSize, poolOverflow int) *connectio
 // ConnPoolTimeout is notified whenever connections are acquired from a pool.
 var ConnPoolCallback func(host string, source string, start time.Time, err error)
 
-func (cp *connectionPool) mkConn() (client *ssh.ClientConn, err error) {
+func mkConn(user, host string) (client *ssh.ClientConn, err error) {
 	// ssh-agent
 	agent_sock, err := net.Dial("unix", os.Getenv("SSH_AUTH_SOCK"))
 	if err != nil {
@@ -49,12 +49,12 @@ func (cp *connectionPool) mkConn() (client *ssh.ClientConn, err error) {
 
 	// ssh-client
 	config := &ssh.ClientConfig{
-		User: cp.username,
+		User: user,
 		Auth: []ssh.ClientAuth{
 			ssh.ClientAuthAgent(ssh.NewAgentClient(agent_sock)),
 		},
 	}
-	dest := cp.host + ":22"
+	dest := host + ":22"
 	if client, err = ssh.Dial("tcp", dest, config); err != nil {
 		return nil, err
 	}
@@ -122,7 +122,7 @@ func (cp *connectionPool) GetWithTimeout(d time.Duration) (rv *ssh.ClientConn, e
 			// Build a connection if we can't get a real one.
 			// This can potentially be an overflow connection, or
 			// a pooled connection.
-			rv, err := cp.mkConn()
+			rv, err := mkConn(cp.username, cp.host)
 			if err != nil {
 				// On error, release our create hold
 				<-cp.createsem
@@ -136,6 +136,12 @@ func (cp *connectionPool) GetWithTimeout(d time.Duration) (rv *ssh.ClientConn, e
 
 func (cp *connectionPool) Get() (*ssh.ClientConn, error) {
 	return cp.GetWithTimeout(ConnPoolTimeout)
+}
+
+func (cp *connectionPool) Hijack() (*ssh.ClientConn, error) {
+	client, err := cp.Get()
+	<-cp.createsem
+	return client, err
 }
 
 func (cp *connectionPool) Return(c *ssh.ClientConn) {
