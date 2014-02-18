@@ -187,8 +187,10 @@ func (config *Config) ProgramEnviron(name string) Environ {
 		config = config.GetProgramConfig(name)
 	}
 	environ := make(map[string]string)
-	for key, i := range (*config)["environ"].(Config) {
-		environ[key] = i.(string)
+	if confenv, ok := (*config)["environ"].(Config); ok {
+		for key, i := range confenv {
+			environ[key] = i.(string)
+		}
 	}
 	return environ
 }

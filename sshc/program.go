@@ -77,14 +77,19 @@ func (p *Program) runProgram() (err error) {
 		errch:   cherr,
 		quit:    p.quit,
 	}, true)
+	p.Close()
 	return
 }
 
 func (p *Program) Kill() {
-	defer func() { recover() }()
 	p.Outch <- p.Sprintf("Getting Killed\n")
+	p.Close()
+}
+
+func (p *Program) Close() {
+	defer func() { recover() }()
 	close(p.quit)
-	p.healthy = false
+	p.healthy = true
 }
 
 func (p *Program) Sprintf(format string, args ...interface{}) string {

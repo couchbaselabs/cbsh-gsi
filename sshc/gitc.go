@@ -15,6 +15,7 @@ func (fabric *Fabric) InstallProgram(prog string, printch outStr, force bool) (e
 	for _, i := range repos {
 		repo := i.(api.Config)
 		target := repo["target"].(string)
+		fmt.Println(target)
 		if force || fabric.IsDir(host, user, target) == false {
 			err = fabric.CloneRepository(host, prog, repo, printch) // Clone
 			if err != nil {
@@ -28,17 +29,19 @@ func (fabric *Fabric) InstallProgram(prog string, printch outStr, force bool) (e
 			printch <- fmt.Sprintf("target %q already exists\n", target)
 		}
 
-		for _, i := range repo["install"].([]interface{}) { // Install
-			command := i.(string)
-			printch <- fmt.Sprintf("%v\n", command)
-			err = fabric.ExecRemoteCommand(&remoteCommand{
-				host:    host,
-				user:    user,
-				environ: environ,
-				command: command,
-				outch:   printch,
-				errch:   printch,
-			}, false)
+		if install_commands, ok := repo["install"].([]interface{}); ok {
+			for _, i := range install_commands { // Install
+				command := i.(string)
+				printch <- fmt.Sprintf("%v\n", command)
+				err = fabric.ExecRemoteCommand(&remoteCommand{
+					host:    host,
+					user:    user,
+					environ: environ,
+					command: command,
+					outch:   printch,
+					errch:   printch,
+				}, false)
+			}
 		}
 	}
 	return
@@ -180,6 +183,7 @@ func (fabric *Fabric) DiffRepository(
 				diffs = append(diffs, s)
 			case s, ok = <-errch:
 				printch <- s
+				break loop
 			case <-q:
 				break loop
 			}

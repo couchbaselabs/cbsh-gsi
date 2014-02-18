@@ -30,7 +30,7 @@ func (idx *Indexsh) Init(c *api.Context, commands api.CommandMap) (err error) {
 	idx.Commands = commands
 	idx.Printch = make(chan string)
 	idx.quit = make(chan bool)
-	go idx.fabricPrinter(c)
+	go fabricPrinter(c.W, idx.Printch, idx.quit)
 	return
 }
 
@@ -63,21 +63,6 @@ func (idx *Indexsh) Close(c *api.Context) {
 	}
 	close(idx.quit)
 	fmt.Fprintf(c.W, "Exiting shell : %v\n", idx.Name())
-}
-
-func (idx *Indexsh) fabricPrinter(c *api.Context) {
-loop:
-	for {
-		select {
-		case s, ok := <-idx.Printch:
-			if !ok {
-				break loop
-			}
-			fmt.Fprintf(c.W, "%v", s)
-		case <-idx.quit:
-			break loop
-		}
-	}
 }
 
 func init() {

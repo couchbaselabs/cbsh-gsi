@@ -243,3 +243,12 @@ func CreateFile(filepath string, force bool) (err error) {
 func ShellDatadir() string {
 	return path.Join(HomeDir(), CBSH_DIR)
 }
+
+func IsKill(kill chan bool) bool {
+	select {
+	case <-kill:
+		return true
+	default:
+		return false
+	}
+}

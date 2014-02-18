@@ -1,7 +1,6 @@
 package sshc
 
 import (
-	"bufio"
 	"code.google.com/p/go.crypto/ssh"
 	"fmt"
 	"github.com/couchbaselabs/cbsh/api"
@@ -145,16 +144,18 @@ func (fabric *Fabric) ExecRemoteCommand(cmd *remoteCommand, daemon bool) (err er
 			return
 		}
 	}
+
 	// Setup stdin, stdout & stderr readers
 	if cmd.inch != nil {
 		go writeIn(stdin, cmd.inch, cmd.errch)
 	}
 	if cmd.outch != nil {
-		go readOut(stdout, cmd.outch, false)
+		go readOut(stdout, cmd.outch)
 	}
 	if cmd.errch != nil {
-		go readOut(stderr, cmd.errch, false)
+		go readOut(stderr, cmd.errch)
 	}
+
 	// Setup remote's environment and run the command
 	if err = setEnviron(cmd.environ, session); err == nil {
 		if daemon {
@@ -170,9 +171,6 @@ func (fabric *Fabric) ExecRemoteCommand(cmd *remoteCommand, daemon bool) (err er
 		if err != nil && cmd.errch != nil {
 			cmd.errch <- fmt.Sprintln(err)
 		}
-	}
-	if cmd.inch != nil {
-		close(cmd.inch)
 	}
 	session.Signal(ssh.SIGTERM)
 	session.Close()
@@ -268,34 +266,6 @@ func remoteStandardio(s *ssh.Session) (io.WriteCloser, io.Reader, io.Reader, err
 		return nil, nil, nil, fmt.Errorf("Error: %v\n", err)
 	}
 	return stdin, stdout, stderr, nil
-}
-
-func readOut(rd io.Reader, ch outStr, doclose bool) {
-	r := bufio.NewReader(rd)
-	for {
-		if buf, _ := r.ReadBytes(api.NEWLINE); len(buf) > 0 {
-			ch <- string(buf)
-		} else {
-			if doclose {
-				close(ch)
-			}
-			break
-		}
-	}
-}
-
-func writeIn(w io.WriteCloser, inch inStr, errch outStr) {
-	for {
-		if s, ok := <-inch; ok {
-			bs := []byte(s)
-			if _, err := w.Write(bs); err != nil {
-				errch <- fmt.Sprintln(err)
-			}
-		} else {
-			w.Close()
-			break
-		}
-	}
 }
 
 func setEnviron(environ api.Environ, session *ssh.Session) (err error) {
