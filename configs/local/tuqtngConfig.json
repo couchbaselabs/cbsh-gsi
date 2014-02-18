@@ -1,0 +1,13 @@
+{ "programs" : [{
+      "name"   : "tuqtng",
+      "targethost" : "localhost",
+      "target" : "{{.GOPATH}}/src/github.com/couchbaselabs/tuqtng",
+      "command"     : "cd {{.target}}; ./tuqtng",
+      "commandargs" : [
+        "-couchbase http://{{.targethost}}:9000",
+        "-log HTTP,NETWORK,PIPELE,CATALOG",
+        "-dev"
+      ],
+      "log.color": "blue"
+  }]
+}

@@ -1,5 +1,5 @@
 { "programs" : [{
-      "name"       : "projector",
+      "name"       : "index_manager",
       "targethost" : "localhost",
       "targetroot" : "{{.HOME}}/plan/src/github.com",
       "environ"  : {
@@ -9,18 +9,14 @@
         { "source"   : "ssh://{{.user}}@{{.targethost}}/Users/prataprc/devgo/src/github.com/couchbaselabs/indexing",
           "target"   : "{{.targetroot}}/couchbaselabs/indexing",
           "install"  : [
-            "cd {{.target}}/projector; GOPATH={{.HOME}}/plan:{{.GOPATH}} $GOROOT/bin/go get .",
-            "cd {{.target}}/projector; GOPATH={{.HOME}}/plan:{{.GOPATH}} $GOROOT/bin/go build"
+            "cd {{.target}}/index_manager; GOPATH={{.HOME}}/plan:{{.GOPATH}} $GOROOT/bin/go get .",
+            "cd {{.target}}/index_manager; GOPATH={{.HOME}}/plan:{{.GOPATH}} $GOROOT/bin/go build"
           ],
           "uninstall": []
         }
       ],
-      "command"     : "{{.targetroot}}/couchbaselabs/indexing/projector/projector",
-      "commandargs" : [
-        "-kvhost localhost:9000",
-        "-imhost localhost:8094",
-        "-inhost localhost:8096"
-      ],
-      "log.color": "magenta"
+      "command"     : "cd {{.targetroot}}/couchbaselabs/indexing/index_manager; ./index_manager",
+      "commandargs" : [],
+      "log.color"   : "cyan"
   }]
 }

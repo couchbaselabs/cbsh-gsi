@@ -1,5 +1,5 @@
 { "programs" : [{
-      "name"       : "index_manager",
+      "name"       : "indexer",
       "targethost" : "localhost",
       "targetroot" : "{{.HOME}}/plan/src/github.com",
       "environ"  : {
@@ -9,14 +9,14 @@
         { "source"   : "ssh://{{.user}}@{{.targethost}}/Users/prataprc/devgo/src/github.com/couchbaselabs/indexing",
           "target"   : "{{.targetroot}}/couchbaselabs/indexing",
           "install"  : [
-            "cd {{.target}}/index_manager; GOPATH={{.HOME}}/plan:{{.GOPATH}} $GOROOT/bin/go get .",
-            "cd {{.target}}/index_manager; GOPATH={{.HOME}}/plan:{{.GOPATH}} $GOROOT/bin/go build"
+            "cd {{.target}}/indexer; GOPATH={{.HOME}}/plan:{{.GOPATH}} $GOROOT/bin/go get .",
+            "cd {{.target}}/indexer; GOPATH={{.HOME}}/plan:{{.GOPATH}} $GOROOT/bin/go build"
           ],
           "uninstall": []
         }
       ],
-      "command"     : "{{.targetroot}}/couchbaselabs/indexing/index_manager/index_manager",
+      "command"     : "cd {{.targetroot}}/couchbaselabs/indexing/indexer; ./indexer",
       "commandargs" : [],
-      "log.color"   : "cyan"
+      "log.color": "yellow"
   }]
 }

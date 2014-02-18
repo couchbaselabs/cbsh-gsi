@@ -1,0 +1,9 @@
+{ "programs" : [{
+      "name"   : "indexer",
+      "targethost" : "localhost",
+      "target" : "{{.GOPATH}}/src/github.com/couchbaselabs/indexing",
+      "command"     : "cd {{.target}}/indexer; ./indexer",
+      "commandargs" : [],
+      "log.color"   : "yellow"
+  }]
+}

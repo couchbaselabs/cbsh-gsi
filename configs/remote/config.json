@@ -1,0 +1,16 @@
+{ "GOPATH"   : "{{.HOME}}/devgo",
+  "user"     : "prataprc",
+  "include"  : [
+    "./tuqtngConfig.json",
+    "./indexerConfig.json",
+    "./indexManagerConfig.json",
+    "./projectorConfig.json"
+  ],
+  "ssh.pool.size"     : 4,
+  "ssh.pool.overflow" : 2,
+  "log.maxsize"       : 10000,
+  "log.stdout"        : true,
+  "log.stdout.filter" : [],
+  "log.stderr"        : true,
+  "log.stderr.filter" : []
+}

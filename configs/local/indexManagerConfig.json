@@ -1,0 +1,10 @@
+{ "programs" : [{
+      "name"   : "index_manager",
+      "targethost" : "localhost",
+      "target" : "{{.GOPATH}}/src/github.com/couchbaselabs/indexing",
+      "repository" : [],
+      "command"     : "cd {{.target}}/index_manager; ./index_manager",
+      "commandargs" : [],
+      "log.color"   : "cyan"
+  }]
+}

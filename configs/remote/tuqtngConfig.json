@@ -6,6 +6,9 @@
         "GOPATH" : "{{.HOME}}/plan:$GOPATH"
       },
       "repository" : [
+        { "source"   : "ssh://{{.user}}@{{.targethost}}/Users/prataprc/devgo/src/github.com/couchbaselabs/go-couchbase",
+          "target"   : "{{.targetroot}}/couchbaselabs/go-couchbase"
+        },
         { "source"   : "ssh://{{.user}}@{{.targethost}}/Users/prataprc/devgo/src/github.com/couchbaselabs/tuqtng",
           "target"   : "{{.targetroot}}/couchbaselabs/tuqtng",
           "install"  : [
@@ -15,7 +18,7 @@
           "uninstall": []
         }
       ],
-      "command"     : "{{.targetroot}}/couchbaselabs/tuqtng/tuqtng",
+      "command"     : "cd {{.targetroot}}/couchbaselabs/tuqtng; ./tuqtng",
       "commandargs" : [
         "-couchbase http://{{.targethost}}:9000",
         "-log HTTP,NETWORK,PIPELE,CATALOG",

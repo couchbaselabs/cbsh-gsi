@@ -1,0 +1,13 @@
+{ "programs" : [{
+      "name"   : "projector",
+      "targethost" : "localhost",
+      "target" : "{{.GOPATH}}/src/github.com/couchbaselabs/indexing",
+      "command"     : "cd {{.target}}/projector; ./projector",
+      "commandargs" : [
+        "-kvhost localhost:9000",
+        "-imhost localhost:8094",
+        "-inhost localhost:8096"
+      ],
+      "log.color": "magenta"
+  }]
+}
