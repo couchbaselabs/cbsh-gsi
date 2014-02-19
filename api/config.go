@@ -137,7 +137,11 @@ func (config *Config) TargetHost(name string) string {
 // TargetRoot returns program's root directory from configuration.
 func (config *Config) TargetRoot(name string) string {
 	pconf := config.GetProgramConfig(name)
-	return (*pconf)["targetroot"].(string)
+	v := (*pconf)["targetroot"]
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
 }
 
 // TargetHost returns slice of program's source repositories

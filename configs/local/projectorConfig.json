@@ -2,7 +2,7 @@
       "name"   : "projector",
       "targethost" : "localhost",
       "target" : "{{.GOPATH}}/src/github.com/couchbaselabs/indexing",
-      "command"     : "cd {{.target}}/projector; ./projector",
+      "command"     : "cd {{.target}}/projector; GOMAXPROCS=8 ./projector -nconn 8",
       "commandargs" : [
         "-kvhost localhost:9000",
         "-imhost localhost:8094",

@@ -76,7 +76,9 @@ func installForIndex(
 		host := idx.Fabric.Config.TargetHost(progname)
 		dir := idx.Fabric.Config.TargetRoot(progname)
 		user := idx.Fabric.Config.User(progname)
-		err = idx.Fabric.MakeRemoteDirs(host, user, dir, idx.Printch)
+		if dir != "" {
+			err = idx.Fabric.MakeRemoteDirs(host, user, dir, idx.Printch)
+		}
 		if err != nil {
 			return
 		}

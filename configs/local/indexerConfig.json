@@ -2,7 +2,7 @@
       "name"   : "indexer",
       "targethost" : "localhost",
       "target" : "{{.GOPATH}}/src/github.com/couchbaselabs/indexing",
-      "command"     : "cd {{.target}}/indexer; ./indexer",
+      "command"     : "cd {{.target}}/indexer; GOMAXPROCS=8 ./indexer",
       "commandargs" : [],
       "log.color"   : "yellow"
   }]
